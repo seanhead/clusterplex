@@ -3,9 +3,9 @@ global:
   nameOverride: "worker"
 
 image:
-  repository: '{{ .Values.global.plexImage.repository }}'
-  tag: '{{ .Values.global.plexImage.tag | default "latest" }}'
-  imagePullPolicy: '{{ .Values.global.plexImage.imagePullPolicy }}'
+  repository: '{{ .Values.worker.image.repository | default ( .Values.worker.useHardwareTranscoder | ternary "ghcr.io/pabloromeo/clusterplex_worker_hw" .Values.global.plexImage.repository ) }}'
+  tag: '{{ .Values.worker.image.tag | default ( .Values.worker.useHardwareTranscoder | ternary ( .Values.global.clusterplexVersion | default .Chart.AppVersion ) ( .Values.global.plexImage.tag | default "latest" ) ) }}'
+  imagePullPolicy: '{{ .Values.worker.image.pullPolicy | default .Values.global.plexImage.imagePullPolicy }}'
 
 controller:
   type: '{{ .Values.worker.config.type | default "statefulset" }}'
@@ -22,7 +22,7 @@ configMaps:
       PGID: '{{ .Values.global.PGID | default "1000" }}'
       PUID: '{{ .Values.global.PUID | default "1000" }}'
       VERSION: docker
-      DOCKER_MODS: 'ghcr.io/pabloromeo/clusterplex_worker_dockermod:{{ .Values.global.clusterplexVersion | default .Chart.AppVersion }}'
+      DOCKER_MODS: '{{ if and .Values.worker.useDockerMod (not .Values.worker.useHardwareTranscoder) }}ghcr.io/pabloromeo/clusterplex_worker_dockermod:{{ .Values.global.clusterplexVersion | default .Chart.AppVersion }}{{ end }}'
       ORCHESTRATOR_URL: 'http://{{ .Release.Name }}-orchestrator:{{ .Values.orchestrator.config.port | default "3500" }}'
       LISTENING_PORT: '{{ .Values.worker.config.port | default "3501" }}'
       STAT_CPU_INTERVAL: '{{ .Values.worker.config.cpuStatInterval | default "10000" }}'

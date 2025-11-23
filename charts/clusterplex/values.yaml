@@ -390,6 +390,22 @@ worker:
   # -- Enable or disable the Worker component
   enabled: true
 
+  # -- Enable the hardware transcoder image.
+  # This will default to using the ghcr.io/pabloromeo/clusterplex_worker_hw image and disable the Docker Mod.
+  # You can still override the image repository and tag using the image section below.
+  useHardwareTranscoder: false
+
+  # -- Configure the image used for the worker.
+  # If not set, defaults to global.plexImage
+  image:
+    repository:
+    tag:
+    pullPolicy:
+
+  # -- Whether to use the Docker Mod to install the worker code.
+  # Set to false if using a custom image that already includes the worker code (e.g. extended image).
+  useDockerMod: true
+
   # -- Additional environment variables. Template enabled.
   # Syntax options:
   # A) TZ: UTC

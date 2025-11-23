@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y \
     mesa-utils \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /config/Library/Application\ Support/Plex\ Media\ Server/Cache/va-dri-linux-x86_64 && \
+    cp -r /usr/lib/x86_64-linux-gnu/dri/* /config/Library/Application\ Support/Plex\ Media\ Server/Cache/va-dri-linux-x86_64
+
 EXPOSE 3501
 
 VOLUME /codecs

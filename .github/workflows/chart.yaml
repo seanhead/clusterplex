@@ -53,7 +53,7 @@ jobs:
         shell: bash
         working-directory: dest
         run: |
-          helm repo index --url https://pabloromeo.github.io/clusterplex --merge index.yaml .
+          helm repo index --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }} --merge index.yaml .
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5

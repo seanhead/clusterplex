@@ -31,6 +31,9 @@ global:
       # -- Enable or disable the transcode PVC. This should only be disabled if you are not using the workers.
       enabled: true
 
+      # -- Set chown to true to have the initContainer set the ownership of the transcode volume to the PUID and PGID specified above. This is required if using the workers and a shared storage for transcodes.
+      chown: true
+
       # -- Storage class for the transcode volume.
       # If set to `-`, dynamic provisioning is disabled.
       # If set to something else, the given storageClass is used.
@@ -466,6 +469,9 @@ worker:
     # -- Enable or disable the creation of the codec volumes
     enabled: true
 
+    # -- Set chown to true to have the initContainer set the ownership of the codec volume to the PUID and PGID specified above. This is required if using the workers and codec volumes.
+    chown: true
+    
     # -- Add any extra labels needed
     labels: {}
 

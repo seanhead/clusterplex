@@ -1,8 +1,5 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Docker Builds
 
-# Controls when the workflow will run
 on:
   workflow_dispatch:
   schedule:
@@ -27,25 +24,76 @@ permissions:
   contents: read
   packages: write
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  check-base-image:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Get current linuxserver/plex digest
+        id: current
+        run: |
+          DIGEST=$(docker buildx imagetools inspect linuxserver/plex:latest --format '{{json .Manifest}}' | jq -r '.digest // .config.digest' 2>/dev/null || true)
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then
+            DIGEST=$(skopeo inspect --raw docker://linuxserver/plex:latest | jq -r '.digest // empty' 2>/dev/null || true)
+          fi
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "null" ]; then
+            DIGEST=$(curl -s "https://hub.docker.com/v2/repositories/linuxserver/plex/tags/latest" | jq -r '.digest')
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Current digest: $DIGEST"
+
+      - name: Restore cached digest
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .base-image-digest
+          key: base-image-digest-${{ steps.current.outputs.digest }}
+          restore-keys: |
+            base-image-digest-
+
+      - name: Compare digests
+        id: check
+        run: |
+          if [ -f .base-image-digest ]; then
+            CACHED=$(cat .base-image-digest)
+            echo "Cached digest: $CACHED"
+            if [ "$CACHED" = "${{ steps.current.outputs.digest }}" ]; then
+              echo "Base image unchanged"
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Base image changed"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "No cached digest found, assuming changed"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save new digest to cache
+        if: steps.check.outputs.changed == 'true'
+        run: echo "${{ steps.current.outputs.digest }}" > .base-image-digest
+
+      - name: Update cache
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .base-image-digest
+          key: base-image-digest-${{ steps.current.outputs.digest }}
+
   build-pms:
+    needs: check-base-image
+    if: ${{ github.event_name != 'schedule' || needs.check-base-image.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      # Get the repositery's code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-
-      #      - name: Available platforms
-      #        run: echo ${{ steps.buildx.outputs.platforms }}
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -64,11 +112,9 @@ jobs:
         id: meta_pms
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
             ${{ github.repository == 'pabloromeo/clusterplex' && 'pabloromeo/clusterplex_pms' || '' }}
             ghcr.io/${{ github.repository_owner }}/clusterplex_pms
-          # generate Docker tags based on the following events/attributes
           tags: |
             type=schedule
             type=ref,event=branch
@@ -97,22 +143,18 @@ jobs:
           short-description: "PMS image for ClusterPlex"
 
   build-worker:
+    needs: check-base-image
+    if: ${{ github.event_name != 'schedule' || needs.check-base-image.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      # Get the repositery's code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-
-      #      - name: Available platforms
-      #        run: echo ${{ steps.buildx.outputs.platforms }}
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -132,11 +174,9 @@ jobs:
         id: meta_worker
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
             ${{ github.repository == 'pabloromeo/clusterplex' && 'pabloromeo/clusterplex_worker' || '' }}
             ghcr.io/${{ github.repository_owner }}/clusterplex_worker
-          # generate Docker tags based on the following events/attributes
           tags: |
             type=schedule
             type=ref,event=branch
@@ -159,11 +199,9 @@ jobs:
         id: meta_worker_hw
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
             ${{ github.repository == 'pabloromeo/clusterplex' && 'pabloromeo/clusterplex_worker_hw' || '' }}
             ghcr.io/${{ github.repository_owner }}/clusterplex_worker_hw
-          # generate Docker tags based on the following events/attributes
           tags: |
             type=schedule
             type=ref,event=branch
@@ -194,22 +232,18 @@ jobs:
           short-description: "Worker image for ClusterPlex"
 
   build-orchestrator:
+    needs: check-base-image
+    if: ${{ github.event_name != 'schedule' || needs.check-base-image.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      # Get the repositery's code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
-
-      #      - name: Available platforms
-      #        run: echo ${{ steps.buildx.outputs.platforms }}
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -229,11 +263,9 @@ jobs:
         id: meta_orchestrator
         uses: docker/metadata-action@v5
         with:
-          # list of Docker images to use as base name for tags
           images: |
             ${{ github.repository == 'pabloromeo/clusterplex' && 'pabloromeo/clusterplex_orchestrator' || '' }}
             ghcr.io/${{ github.repository_owner }}/clusterplex_orchestrator
-          # generate Docker tags based on the following events/attributes
           tags: |
             type=schedule
             type=ref,event=branch

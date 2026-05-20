@@ -27,6 +27,7 @@ configMaps:
       LISTENING_PORT: '{{ .Values.worker.config.port | default "3501" }}'
       STAT_CPU_INTERVAL: '{{ .Values.worker.config.cpuStatInterval | default "10000" }}'
       EAE_SUPPORT: '{{ .Values.worker.config.eaeSupport | default "1" }}'
+      FFMPEG_HWENC: '{{ .Values.worker.config.ffmpegHwenc | default "" }}'
 
 envFrom:
   - configMapRef:

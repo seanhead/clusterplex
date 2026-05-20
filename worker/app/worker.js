@@ -10,11 +10,14 @@ const EAE_SUPPORT = process.env.EAE_SUPPORT || "1";
 const EAE_EXECUTABLE = process.env.EAE_EXECUTABLE || "";
 // hwaccel decoder: https://trac.ffmpeg.org/wiki/HWAccelIntro
 const FFMPEG_HWACCEL = process.env.FFMPEG_HWACCEL || false;
+// hwaccel encoder: replace software encoder with hardware encoder (e.g. "h264_nvenc")
+const FFMPEG_HWENC = process.env.FFMPEG_HWENC || false;
 
 // Settings debug info
 console.log(`EAE_SUPPORT => ${EAE_SUPPORT}`);
 console.log(`EAE_EXECUTABLE => ${EAE_EXECUTABLE}`);
 console.log(`FFMPEG_HWACCEL => ${FFMPEG_HWACCEL}`);
+console.log(`FFMPEG_HWENC => ${FFMPEG_HWENC}`);
 
 var app = require("express")();
 var server = require("http").createServer(app);
@@ -109,6 +112,72 @@ socket.on("worker.task.request", (taskRequest) => {
 				taskRequest.payload.args[i + 1] = FFMPEG_HWACCEL;
 			} else {
 				taskRequest.payload.args.unshift("-hwaccel", FFMPEG_HWACCEL);
+			}
+		}
+
+		// Replace software encoder with hardware encoder
+		if (FFMPEG_HWENC != false) {
+			const args = taskRequest.payload.args;
+			for (let i = 0; i < args.length; i++) {
+				// Replace libx264 with NVENC h264 encoder
+				if (args[i].match(/^-codec:\d+$/) && args[i + 1] === "libx264") {
+					const codecFlag = args[i];
+					const streamIdx = codecFlag.split(":")[1];
+					console.log(`Replacing encoder libx264 -> ${FFMPEG_HWENC} for stream ${streamIdx}`);
+					args[i + 1] = FFMPEG_HWENC;
+
+					// Replace -crf with -cq (NVENC constant quality)
+					for (let j = 0; j < args.length; j++) {
+						if (args[j] === `-crf:${streamIdx}`) {
+							console.log(`Replacing -crf:${streamIdx} -> -cq:${streamIdx} (value: ${args[j + 1]})`);
+							args[j] = `-cq:${streamIdx}`;
+						}
+						// Replace x264-specific preset with NVENC preset
+						if (args[j] === `-preset:${streamIdx}`) {
+							const oldPreset = args[j + 1];
+							// Map x264 presets to NVENC presets (p1=fastest, p7=slowest)
+							const presetMap = {
+								ultrafast: "p1", superfast: "p2", veryfast: "p3",
+								faster: "p4", fast: "p5", medium: "p5",
+								slow: "p6", slower: "p7", veryslow: "p7"
+							};
+							const newPreset = presetMap[oldPreset] || "p4";
+							console.log(`Replacing preset ${oldPreset} -> ${newPreset} for stream ${streamIdx}`);
+							args[j + 1] = newPreset;
+						}
+						// Remove x264opts (not compatible with NVENC)
+						if (args[j] === `-x264opts:${streamIdx}`) {
+							console.log(`Removing -x264opts:${streamIdx} ${args[j + 1]}`);
+							args.splice(j, 2);
+							j--;
+						}
+					}
+				}
+				// Replace libx265 with NVENC hevc encoder
+				if (args[i].match(/^-codec:\d+$/) && args[i + 1] === "libx265") {
+					const streamIdx = args[i].split(":")[1];
+					const hevcEncoder = FFMPEG_HWENC.replace("h264_nvenc", "hevc_nvenc");
+					console.log(`Replacing encoder libx265 -> ${hevcEncoder} for stream ${streamIdx}`);
+					args[i + 1] = hevcEncoder;
+
+					for (let j = 0; j < args.length; j++) {
+						if (args[j] === `-crf:${streamIdx}`) {
+							args[j] = `-cq:${streamIdx}`;
+						}
+						if (args[j] === `-preset:${streamIdx}`) {
+							const presetMap = {
+								ultrafast: "p1", superfast: "p2", veryfast: "p3",
+								faster: "p4", fast: "p5", medium: "p5",
+								slow: "p6", slower: "p7", veryslow: "p7"
+							};
+							args[j + 1] = presetMap[args[j + 1]] || "p4";
+						}
+						if (args[j] === `-x265-params:${streamIdx}`) {
+							args.splice(j, 2);
+							j--;
+						}
+					}
+				}
 			}
 		}
 

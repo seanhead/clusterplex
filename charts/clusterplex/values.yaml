@@ -444,6 +444,10 @@ worker:
     # -- Controls usage of the EasyAudioDecoder 1 = ON (default) and 0 = OFF
     eaeSupport: 1
 
+    # -- Hardware encoder to use (e.g. "h264_nvenc" for NVIDIA). When set, the worker
+    # -- will replace software encoders (libx264/libx265) with the specified hardware encoder.
+    ffmpegHwenc: ""
+
     # -- Determines which controller to use for deploying workers (`statefulset` or `deployment`). Note that `worker.codecVolumes` may require additional configuration when using `deployment`, otherwise codecs will be fetched on every Pod startup.
     type: statefulset
 

@@ -1,13 +1,30 @@
 const LISTENING_PORT = process.env.LISTENING_PORT || 3501;
 const STAT_CPU_INTERVAL = process.env.STAT_CPU_INTERVAL || 2000;
 const STAT_CPU_OPS_DURATION = process.env.STAT_CPU_OPS_DURATION || 1000;
+var fs = require("fs");
 const ORCHESTRATOR_URL =
 	process.env.ORCHESTRATOR_URL || "http://localhost:3500";
 const TRANSCODER_PATH =
 	process.env.TRANSCODER_PATH || "/usr/lib/plexmediaserver/";
 const TRANSCODER_NAME = process.env.TRANSCODER_NAME || "Plex Transcoder";
 const EAE_SUPPORT = process.env.EAE_SUPPORT || "1";
-const EAE_EXECUTABLE = process.env.EAE_EXECUTABLE || "";
+const CODECS_PATH = process.env.CODECS_PATH || "/codecs";
+// Auto-discover EAE binary from codecs directory if not explicitly set
+function findEAEBinary() {
+	if (process.env.EAE_EXECUTABLE) return process.env.EAE_EXECUTABLE;
+	try {
+		const dirs = fs.readdirSync(CODECS_PATH);
+		for (const dir of dirs) {
+			const eaePath = `${CODECS_PATH}/${dir}/EasyAudioEncoder/EasyAudioEncoder/EasyAudioEncoder`;
+			if (fs.existsSync(eaePath)) {
+				console.log(`EAE Support - Auto-discovered EAE binary: ${eaePath}`);
+				return eaePath;
+			}
+		}
+	} catch (e) { /* codecs dir may not exist */ }
+	return "";
+}
+const EAE_EXECUTABLE = findEAEBinary();
 // hwaccel decoder: https://trac.ffmpeg.org/wiki/HWAccelIntro
 const FFMPEG_HWACCEL = process.env.FFMPEG_HWACCEL || false;
 // hwaccel encoder: replace software encoder with hardware encoder (e.g. "h264_nvenc")
@@ -23,7 +40,6 @@ var app = require("express")();
 var server = require("http").createServer(app);
 var socket = require("socket.io-client")(ORCHESTRATOR_URL);
 var cpuStat = require("cpu-stat");
-var fs = require("fs");
 const { spawn, exec } = require("child_process");
 const { v4: uuid } = require("uuid");
 const { fib, dist } = require("cpu-benchmark");

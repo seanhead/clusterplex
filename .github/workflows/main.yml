@@ -215,7 +215,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./worker
-          file: ./worker/extended-image-hw/Dockerfile
+          file: ./worker/extended-image/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta_worker_hw.outputs.tags }}

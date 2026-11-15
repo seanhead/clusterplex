@@ -22,21 +22,8 @@ RUN bash /etc/s6-overlay/s6-rc.d/1-install-dependencies/run && \
     /var/tmp/*
 
 RUN apt-get update && apt-get install -y \
-    vainfo \
-    libva2 \
-    libva-drm2 \
-    libva-x11-2 \
-    intel-media-va-driver-non-free \
-    i965-va-driver \
-    intel-gpu-tools \
-    intel-opencl-icd \
-    libdrm-intel1 \
-    mesa-utils \
     wget \
     && rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /config/Library/Application\ Support/Plex\ Media\ Server/Cache/va-dri-linux-x86_64 && \
-    cp -r /usr/lib/x86_64-linux-gnu/dri/* /config/Library/Application\ Support/Plex\ Media\ Server/Cache/va-dri-linux-x86_64
 
 EXPOSE 3501
 

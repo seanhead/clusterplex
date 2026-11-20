@@ -15,6 +15,10 @@ global:
   # @default -- The appVersion for this chart
   clusterplexVersion:
 
+  # -- Inject the ClusterPlex docker mods via DOCKER_MODS. Set to false when plexImage/worker images
+  # are ClusterPlex extended images that already include the app, otherwise the mod overwrites them.
+  useDockerMods: true
+
   # -- The timezone configured for each pod
   timezone: America/Chicago
 

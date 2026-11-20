@@ -15,7 +15,9 @@ configMaps:
       TZ: '{{ .Values.global.timezone | default "America/Chicago" }}'
       PGID: '{{ .Values.global.PGID | default "1000" }}'
       PUID: '{{ .Values.global.PUID | default "1000" }}'
+      {{- if .Values.global.useDockerMods }}
       DOCKER_MODS: 'ghcr.io/pabloromeo/clusterplex_dockermod:{{ .Values.global.clusterplexVersion | default .Chart.AppVersion }}'
+      {{- end }}
       ORCHESTRATOR_URL: 'http://{{ .Release.Name }}-orchestrator:{{ .Values.orchestrator.config.port | default "3500" }}'
       {{ if .Values.pms.config.localRelayEnabled }}
       PMS_SERVICE: '{{ .Release.Name }}-pms'

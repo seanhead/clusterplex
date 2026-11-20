@@ -152,6 +152,7 @@ socket.on("worker.task.request", (taskRequest) => {
 					const streamIdx = codecFlag.split(":")[1];
 					console.log(`Replacing encoder libx264 -> ${FFMPEG_HWENC} for stream ${streamIdx}`);
 					args[i + 1] = FFMPEG_HWENC;
+					forceIdr(args, streamIdx);
 
 					// Replace -crf with -cq (NVENC constant quality)
 					for (let j = 0; j < args.length; j++) {
@@ -186,6 +187,7 @@ socket.on("worker.task.request", (taskRequest) => {
 					const hevcEncoder = FFMPEG_HWENC.replace("h264_nvenc", "hevc_nvenc");
 					console.log(`Replacing encoder libx265 -> ${hevcEncoder} for stream ${streamIdx}`);
 					args[i + 1] = hevcEncoder;
+					forceIdr(args, streamIdx);
 				}
 			}
 		}
@@ -367,6 +369,18 @@ ON_DEATH((signal, err) => {
 	}
 	process.exit(exitCode);
 });
+
+// NVENC encodes -force_key_frames as non-IDR I-frames unless forced-idr is set, so the DASH
+// muxer can't split there and segments fall back to the default 250-frame GOP, which no longer
+// match the fixed segment durations in Plex's manifest and leave playback gaps.
+function forceIdr(args, streamIdx) {
+	const flag = `-forced-idr:${streamIdx}`;
+	if (args.includes(flag)) return;
+	const codecPos = args.indexOf(`-codec:${streamIdx}`, args.indexOf("-i"));
+	if (codecPos < 0) return;
+	console.log(`Adding ${flag} 1 so forced keyframes are IDR segment boundaries`);
+	args.splice(codecPos + 2, 0, flag, "1");
+}
 
 function deleteEAE_PID() {
 	if (fs.existsSync(EAE_PID_FILE)) {

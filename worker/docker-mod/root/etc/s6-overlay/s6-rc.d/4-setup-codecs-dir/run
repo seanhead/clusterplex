@@ -14,4 +14,5 @@ chown abc:abc /codecs
 
 echo "**** Setting up /run/clusterplex for container-local EAE PID ****"
 mkdir -p /run/clusterplex
-chown abc:abc /run/clusterplex
+# Runs before the PUID/PGID remap of abc, so use the numeric IDs
+chown "${PUID:-911}:${PGID:-911}" /run/clusterplex

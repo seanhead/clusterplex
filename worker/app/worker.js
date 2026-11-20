@@ -377,5 +377,9 @@ function deleteEAE_PID() {
 
 function createEAE_PID(pid) {
 	console.log("EAE Support - Writing PID file");
-	fs.writeFileSync(EAE_PID_FILE, pid);
+	try {
+		fs.writeFileSync(EAE_PID_FILE, pid);
+	} catch (err) {
+		console.error(`EAE Support - Unable to write PID file ${EAE_PID_FILE}: ${err.message}`);
+	}
 }

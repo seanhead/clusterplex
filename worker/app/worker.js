@@ -2,6 +2,7 @@ const LISTENING_PORT = process.env.LISTENING_PORT || 3501;
 const STAT_CPU_INTERVAL = process.env.STAT_CPU_INTERVAL || 2000;
 const STAT_CPU_OPS_DURATION = process.env.STAT_CPU_OPS_DURATION || 1000;
 var fs = require("fs");
+const path = require("path");
 const ORCHESTRATOR_URL =
 	process.env.ORCHESTRATOR_URL || "http://localhost:3500";
 const TRANSCODER_PATH =
@@ -25,6 +26,14 @@ function findEAEBinary() {
 	return "";
 }
 const EAE_EXECUTABLE = findEAEBinary();
+// Kept in container-local storage (not the /codecs PVC) so a stale PID can't survive pod restarts
+const EAE_PID_FILE =
+	process.env.EAE_PID_FILE || "/run/clusterplex/easy-audio-encoder.pid";
+try {
+	fs.mkdirSync(path.dirname(EAE_PID_FILE), { recursive: true });
+} catch (err) {
+	console.error(`EAE Support - Unable to create PID directory: ${err.message}`);
+}
 // hwaccel decoder: https://trac.ffmpeg.org/wiki/HWAccelIntro
 const FFMPEG_HWACCEL = process.env.FFMPEG_HWACCEL || false;
 // hwaccel encoder: replace software encoder with hardware encoder (e.g. "h264_nvenc")
@@ -83,6 +92,8 @@ setInterval(() => {
 
 let workerId = uuid();
 let taskMap = new Map();
+let currentEAERoot;
+let currentEAEProcess;
 
 console.debug(`Initializing Worker ${workerId}|${process.env.HOSTNAME}`);
 
@@ -194,7 +205,24 @@ socket.on("worker.task.request", (taskRequest) => {
 				});
 			}
 
-			if (fs.existsSync(`${EAE_EXECUTABLE}.pid`)) {
+			// PMS restarts produce a new EAE_ROOT; EAE must be restarted there or its watchfolder never exists
+			if (
+				currentEAERoot &&
+				currentEAERoot != processedEnvironmentVariables.EAE_ROOT
+			) {
+				console.log(
+					`EAE Support - EAE_ROOT changed => "${currentEAERoot}" to "${processedEnvironmentVariables.EAE_ROOT}"`
+				);
+				if (currentEAEProcess) {
+					console.log("EAE Support - Killing previous EasyAudioEncoder");
+					currentEAEProcess.kill();
+				}
+				currentEAEProcess = undefined;
+				currentEAERoot = undefined;
+				deleteEAE_PID();
+			}
+
+			if (fs.existsSync(EAE_PID_FILE)) {
 				console.log(`EAE Support - EAE already running`);
 			} else {
 				console.log(
@@ -204,20 +232,30 @@ socket.on("worker.task.request", (taskRequest) => {
 					cwd: processedEnvironmentVariables.EAE_ROOT,
 					env: processedEnvironmentVariables,
 				});
+				currentEAEProcess = childEAE;
+				currentEAERoot = processedEnvironmentVariables.EAE_ROOT;
 				childEAE.stdout.pipe(process.stdout);
 				childEAE.stderr.pipe(process.stderr);
+				// Ignore events from a previously-killed EAE so they don't delete the new one's PID
+				const onEAEEnded = () => {
+					if (currentEAEProcess === childEAE) {
+						currentEAEProcess = undefined;
+						currentEAERoot = undefined;
+						deleteEAE_PID();
+					}
+				};
 				childEAE.on("error", (err) => {
 					console.error("EAE Support - EAE failed:");
 					console.error(err);
-					deleteEAE_PID();
+					onEAEEnded();
 				});
 				childEAE.on("close", () => {
 					console.log("EAE Support - Closing");
-					deleteEAE_PID();
+					onEAEEnded();
 				});
 				childEAE.on("exit", () => {
 					console.log("EAE Support - Exiting");
-					deleteEAE_PID();
+					onEAEEnded();
 				});
 
 				createEAE_PID(childEAE.pid.toString());
@@ -331,13 +369,13 @@ ON_DEATH((signal, err) => {
 });
 
 function deleteEAE_PID() {
-	if (fs.existsSync(`${EAE_EXECUTABLE}.pid`)) {
+	if (fs.existsSync(EAE_PID_FILE)) {
 		console.log("Removing EAE PID file");
-		fs.unlinkSync(`${EAE_EXECUTABLE}.pid`);
+		fs.unlinkSync(EAE_PID_FILE);
 	}
 }
 
 function createEAE_PID(pid) {
 	console.log("EAE Support - Writing PID file");
-	fs.writeFileSync(`${EAE_EXECUTABLE}.pid`, pid);
+	fs.writeFileSync(EAE_PID_FILE, pid);
 }

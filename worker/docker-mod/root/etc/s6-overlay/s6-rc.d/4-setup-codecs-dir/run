@@ -11,3 +11,7 @@ fi
 
 echo "**** Changing ownership for /codecs ****"
 chown abc:abc /codecs
+
+echo "**** Setting up /run/clusterplex for container-local EAE PID ****"
+mkdir -p /run/clusterplex
+chown abc:abc /run/clusterplex

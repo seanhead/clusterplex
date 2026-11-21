@@ -142,6 +142,8 @@ socket.on("worker.task.request", (taskRequest) => {
 			}
 		}
 
+		skipDashSidx(taskRequest.payload.args);
+
 		// Replace software encoder with hardware encoder
 		if (FFMPEG_HWENC != false) {
 			const args = taskRequest.payload.args;
@@ -369,6 +371,21 @@ ON_DEATH((signal, err) => {
 	}
 	process.exit(exitCode);
 });
+
+// FFmpeg's mp4 muxer rewrites the pts of a segment-leading open-GOP (CRA) keyframe when building
+// the sidx, leaving DASH segments with a duplicate pts and a hole at the keyframe. Players stall or
+// skip there, mostly on HEVC direct streams (video copy). skip_sidx avoids that code path.
+// https://forums.plex.tv/t/plex-web-skips-10-to-20-seconds-in-open-gop-hevc-files-fixed/943943
+function skipDashSidx(args) {
+	if (args.some((a) => a.includes("skip_sidx"))) return;
+	for (let i = 0; i < args.length - 1; i++) {
+		if (args[i] === "-f" && args[i + 1] === "dash") {
+			console.log("Adding -format_options movflags=+skip_sidx to DASH output");
+			args.splice(i + 2, 0, "-format_options", "movflags=+skip_sidx");
+			return;
+		}
+	}
+}
 
 // NVENC encodes -force_key_frames as non-IDR I-frames unless forced-idr is set, so the DASH
 // muxer can't split there and segments fall back to the default 250-frame GOP, which no longer
